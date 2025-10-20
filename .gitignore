@@ -1,5 +1,12 @@
-# API Anahtarı
+# API Anahtarları ve Ortam Dosyaları
 .env
 
-# Vektör Veri Tabanı Dosyaları
-chroma_db/
+# Vektör Veritabanı Dosyaları (Chroma veya FAISS gibi)
+chroma_db_path/
+
+# Sanal Ortamlar
+venv/
+.venv/
+
+# Veri Setleri (Boyutu büyükse eklemeyin)
+veriler.csv
