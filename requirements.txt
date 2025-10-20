@@ -1,1 +1,7 @@
-
+pandas
+google-genai
+langchain
+langchain-google-genai
+chromadb
+streamlit
+python-dotenv 
