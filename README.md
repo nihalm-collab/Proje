@@ -1,27 +1,43 @@
-# Akbank GenAI Bootcamp Projesi: RAG Tabanlı Deprem Bilgilendirme Chatbotu
+# 🌍 RAG Tabanlı Deprem Bilgilendirme Chatbotu Projesi
 
-## [cite_start]🚀 Projenin Amacı [cite: 9]
-[cite_start]Bu projenin temel amacı, Retrieval Augmented Generation (RAG) mimarisini kullanarak Türkiye'deki tarihsel deprem verilerine dayalı spesifik soruları yanıtlayabilen bir chatbot geliştirmektir[cite: 2]. [cite_start]Chatbot, web arayüzü üzerinden kullanıcıya sunulacaktır[cite: 2].
+## 1. Projenin Amacı
 
-## [cite_start]📊 Veri Seti Hakkında Bilgi [cite: 10]
-* **Adı:** Turkey Earthquake Data 1914-2023
-* **Kaynak:** Kaggle
-* **İçerik Özeti:** Veri seti, 1914-2023 yılları arasında Türkiye'de meydana gelen depremlere ait zaman, yer, büyüklük, derinlik gibi temel sismik bilgileri içermektedir. Bu veriler, chatbot'un bilgi kaynağını (Knowledge Base) oluşturacaktır.
+Bu projenin temel amacı, RAG (Retrieval Augmented Generation) mimarisi kullanarak **deprem verilerine dayalı** bir bilgilendirme chatbotu geliştirmektir. Chatbot, kullanıcıların belirli bir bölge veya tarih aralığındaki depremler hakkında sorduğu sorulara, elindeki bilgi tabanını kullanarak doğru ve bağlamsal yanıtlar verecektir. Proje, geliştirilen çözümü bir web arayüzü üzerinden sunmayı hedeflemektedir.
 
-## [cite_start]🛠️ Kullanılan Yöntemler [cite: 11]
-Proje, RAG (Retrieval Augmented Generation) prensibine dayanmaktadır. Bu mimari şunları içerir:
-1.  **Veri Ön İşleme ve Parçalama (Chunking):** Deprem verisinin okunması ve vektörleştirmeye uygun parçalara ayrılması.
-2.  [cite_start]**Embedding:** Parçalanan metinlerin vektör uzayına dönüştürülmesi[cite: 43].
-3.  [cite_start]**Vektör Veritabanı (Vector DB):** Vektörlerin depolanması ve kullanıcı sorgularına yanıt bulmak için hızlıca aranması[cite: 43].
-4.  [cite_start]**Generation Model (LLM):** Kullanıcı sorusu ve ilgili veriler kullanılarak nihai yanıtın oluşturulması[cite: 42].
+## 2. Veri Seti Hakkında Bilgi
 
-*Kullanılacak Teknolojiler (Geliştirme aşamasında kesinleşecektir):*
-* [cite_start]**RAG Framework:** LangChain veya Haystack [cite: 44]
-* [cite_start]**Generation Model:** Gemini API [cite: 42]
-* [cite_start]**Vektör Database:** Chroma veya FAISS [cite: 43]
+* **Kaynak:** Projenin temel bilgi kaynağı, Kaggle'dan alınan "Turkey Earthquake Data 1914-2023" veri setidir.
+* **Veri Tipi:** Veri seti orijinalinde deprem büyüklüğü (`Mw`), oluş tarihi, derinlik ve konum (`Yer`) gibi tablosal (CSV) verilerden oluşmaktadır.
+* **RAG Dönüşümü:** RAG sisteminin metin tabanlı çalışma kısıtlaması nedeniyle, tablosal veriler doğrudan kullanılmamış, bunun yerine her bir deprem kaydı için bilgilendirici metinler türetilerek chatbotun bilgi tabanı (Knowledge Base) oluşturulmuştur.
 
-## [cite_start]💡 Elde Edilen Sonuçlar (Özet) [cite: 12]
-*(Bu bölüm, proje tamamlandığında elde edilen başarımların özetlenmesi için şimdilik boş bırakılmıştır.)*
+## 3. Kullanılan Yöntemler ve Çözüm Mimarisi
 
-## [cite_start]🌐 Web Arayüzü Linki [cite: 13]
-*(Bu link, chatbot deploy edildikten sonra buraya eklenecektir.)*
+Proje, **Python** tabanlı RAG mimarisini kullanmaktadır.
+
+| Bileşen | Kullanılan Teknoloji | Amaç |
+| :--- | :--- | :--- |
+| **RAG Framework** | LangChain | RAG pipeline'ı oluşturmak (Chunking, Retrieval, Generation adımlarını yönetmek). |
+| **Generative Model (LLM)** | Gemini API | Sorgu bağlamına göre nihai ve anlamlı yanıtı üretmek. |
+| **Embedding Model** | Google'ın veya açık kaynaklı bir model | Metin parçalarını (chunks) ve kullanıcı sorgularını sayısal vektörlere dönüştürmek. |
+| **Vector Database** | ChromaDB | Deprem bilgilerinin vektörlerini saklamak ve hızlı anlamsal arama (Semantic Search) yapmak. |
+| **Web Arayüzü** | Streamlit | Chatbot'u web üzerinden kullanıcıya sunmak. |
+
+## 4. Elde Edilen Sonuçlar ve Proje Yetenekleri (Özet)
+
+* **Bilgilendirme:** Kullanıcının spesifik deprem olayları (tarih, büyüklük, konum) hakkındaki sorularına, oluşturulan bilgi tabanına dayanarak yanıt verir.
+* **Bağlamsal Yanıt:** RAG mimarisi sayesinde, LLM'in halüsinasyon yapma riski en aza indirilmiş ve yanıtlar yalnızca sağlanan verilere dayandırılmıştır.
+* **Erişilebilirlik:** Chatbot, Streamlit kullanılarak geliştirilen kullanıcı dostu bir web arayüzü üzerinden erişilebilir durumdadır.
+
+***
+
+## 5. Projenin Çalışma Kılavuzu (Detaylar 1.2. Aşamada Verilecektir)
+
+Projenin yerel veya bulut ortamında çalıştırılması için gerekli adımlar ve bağımlılıklar (Virtual Environment kurulumu, `requirements.txt` ile paket yükleme, API anahtarı ayarları) detaylı olarak açıklanacaktır.
+
+***
+
+## 6. Web Arayüzü & Product Kılavuzu
+
+[Bu alana, proje tamamlandıktan sonra arayüzün ekran görüntüsü/video anlatımı ve test sorguları eklenecektir. Proje henüz tamamlanmadığı için şu an boş bırakılmıştır.]
+
+**🌐 Canlı Uygulama Linki:** (Proje Dağıtımı Yapıldığında Buraya Eklenecektir)
