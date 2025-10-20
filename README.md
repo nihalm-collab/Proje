@@ -30,9 +30,53 @@ Proje, **Python** tabanlı RAG mimarisini kullanmaktadır.
 
 ***
 
-## 5. Projenin Çalışma Kılavuzu (Detaylar 1.2. Aşamada Verilecektir)
+## 5. Projenin Çalışma Kılavuzu 
 
-Projenin yerel veya bulut ortamında çalıştırılması için gerekli adımlar ve bağımlılıklar (Virtual Environment kurulumu, `requirements.txt` ile paket yükleme, API anahtarı ayarları) detaylı olarak açıklanacaktır.
+Bu kılavuz, projenin başarılı bir şekilde çalıştırılması için gereken adımları içermektedir.
+
+**1. Gerekli Dosyaları İndirme:**
+
+* GitHub deposunu yerel makinenize klonlayın:
+    ```bash
+    git clone [REPO LİNKİNİZ]
+    cd [PROJE DİZİN ADI]
+    ```
+* Orijinal veri setini (Kaggle: `veriler.csv`) projenizin ana dizinine indirin.
+
+**2. Sanal Ortam Kurulumu:**
+
+* Python sanal ortamı oluşturun:
+    ```bash
+    python -m venv venv
+    ```
+* Sanal ortamı etkinleştirin:
+    * **Windows:** `.\venv\Scripts\activate`
+    * **Linux/macOS:** `source venv/bin/activate`
+
+**3. Bağımlılıkların Yüklenmesi:**
+
+* `requirements.txt` dosyasındaki tüm paketleri yükleyin:
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+**4. API Anahtarı Ayarı:**
+
+* Proje dizininde bulunan `.env` dosyasını açın.
+* Kendi Gemini API anahtarınızı `GEMINI_API_KEY=` satırına ekleyin.
+    ```
+    GEMINI_API_KEY=AIzaSy...
+    ```
+
+**5. Projenin Çalıştırılması:**
+
+* Proje, Streamlit ile sunulmaktadır. Aşağıdaki komutla ana uygulamayı çalıştırın:
+    ```bash
+    streamlit run app.py  # app.py, ana python dosyanızın adı olmalıdır
+    ```
+* Uygulama, otomatik olarak tarayıcınızda açılacaktır.
+
+*(Not: Proje kodunuzun tüm teknik anlatımlarına, Python dosyası içerisinde yorum satırları (`#`) ile yer verilmelidir.)*
 
 ***
 
