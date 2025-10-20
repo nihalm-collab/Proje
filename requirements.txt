@@ -1,7 +1,8 @@
-pandas
 google-genai
 langchain
-langchain-google-genai
+langchain-core
+langchain-community
 chromadb
+pandas
 streamlit
-python-dotenv 
+python-dotenv
