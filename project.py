@@ -1,211 +1,198 @@
+# ==============================================================================
+# PROJE ADI: RAG Tabanlı Deprem Bilgilendirme Chatbotu
+# AMAÇ: Tablosal deprem verilerinden türetilen metinleri kullanarak kullanıcıya
+#       bilgi veren bir RAG chatbotu geliştirmek ve Streamlit ile sunmak.
+# ==============================================================================
+
+# ==============================================================================
+# BÖLÜM 1: GEREKLİ KÜTÜPHANELERİN VE ORTAM AYARLARININ İÇE AKTARILMASI
+# ==============================================================================
 import os
-import pandas as pd
-import streamlit as st
 from dotenv import load_dotenv
+import pandas as pd # CSV dosyasını okumak için
+import streamlit as st # Web arayüzü için
 
-# LangChain bileşenleri
+# RAG Mimarisi Bileşenleri (LangChain Önerisi)
 from langchain_community.document_loaders import DataFrameLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
-from langchain_core.prompts import ChatPromptTemplate
-from langchain.chains import create_retrieval_chain
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+from langchain_community.vectorstores import Chroma # Vektör veritabanı
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings # LLM ve Embedding
+from langchain.text_splitter import RecursiveCharacterTextSplitter # Metin parçalama (Chunking)
+from langchain.chains import RetrievalQA # RAG Zinciri
 
-# -----------------------------------------------------------
-# 1. ORTAM AYARLARI VE SABİT TANIMLAMALAR
-# -----------------------------------------------------------
-
-# .env dosyasını yükle (Lokalde çalışırken API anahtarını alır)
+# API Anahtarını Yükleme
 load_dotenv()
+# .env dosyasındaki anahtarı ortam değişkenlerine yükler
+# Bu, GEMINI_API_KEY'in doğrudan koda yazılmasını önler.
+if not os.getenv("GEMINI_API_KEY"):
+    st.error("GEMINI_API_KEY, .env dosyasında tanımlanmalıdır.")
 
-# API Anahtarını kontrol et ve ayarla (Kaggle/Colab'de zaten ortam değişkeni olarak bulunur)
-if "GEMINI_API_KEY" not in os.environ:
-    st.error("Lütfen GEMINI_API_KEY ortam değişkenini ayarlayın (Lokalde .env, Kaggle'da Secrets).")
-    st.stop()
+# ==============================================================================
+# BÖLÜM 2: VERİ HAZIRLAMA VE DÖNÜŞÜM
+# (Knowledge Base Oluşturma)
+# ==============================================================================
 
-# Model ve Veri Tabanı Sabitleri
-VECTOR_DB_DIR = "chroma_db"
-LLM_MODEL = "gemini-2.5-flash"
-EMBEDDING_MODEL_NAME = "models/embedding-001" # Google'ın önerdiği Embedding modeli
+# Sabitler
+CHROMA_PATH = "chroma_db_deprem" # Vektör veritabanının diskte saklanacağı yer
+CSV_FILE = "veriler.csv" # Kaggle'dan indirilen tablosal veri
 
-# -----------------------------------------------------------
-# 2. VERİ HAZIRLIĞI VE METİNLEŞTİRME FONKSİYONLARI
-# -----------------------------------------------------------
-
-def load_data_and_create_documents():
+def load_and_transform_data(csv_file):
     """
-    Kaggle CSV dosyasını yükler, her bir satırı RAG için uygun metin belgesine dönüştürür.
+    Tablosal veriyi okur ve RAG için metinsel formata dönüştürür.
     """
     try:
-        # Kaggle veri setinin yolu (Ortama göre yolu güncelleyebilirsiniz)
-        data_path = "earthquake_data_1914_2023.csv"
+        df = pd.read_csv(csv_file)
         
-        # Veri setini pandas ile oku
-        df = pd.read_csv(data_path)
-        
-        # Sadece kritik sütunları al
-        df = df[['Time', 'Latitude', 'Longitude', 'Magnitude', 'Depth/Km', 'Region', 'City']]
-        
-        # Her bir satırı metin belgesine dönüştürme fonksiyonu
-        def create_document_content(row):
-            return (
-                f"Tarih ve Saat: {row['Time']}. Bölge/Şehir: {row['Region']} / {row['City']}. "
-                f"Büyüklük: {row['Magnitude']} şiddetinde. Derinlik: {row['Depth/Km']} km. "
-                f"Koordinatlar: {row['Latitude']} enlem, {row['Longitude']} boylam."
-            )
+        # DataFrame'deki her bir satırı (deprem kaydı) metin formatına dönüştürme (KRİTİK ADIM)
+        # RAG, tablosal veriden çok, metinsel bilgilerle daha iyi çalışır.
+        # Deprem verilerinden bilgilendirici bir metin türetme:
+        df['text'] = df.apply(lambda row: (
+            f"Türkiye'de {row['Olus tarihi']} tarihinde, {row['Yer']} bölgesinde "
+            f"Moment Büyüklüğü (Mw) {row['Mw']} olarak kaydedilen bir deprem meydana gelmiştir. "
+            f"Depremin odak derinliği {row['Der (km)']} km'dir. Enlem: {row['Enlem']}, Boylam: {row['Boylam']}. "
+            f"Tip: {row['Tip']}."
+        ), axis=1)
 
-        # Tüm DataFrame'i LangChain Document nesnelerine dönüştür (Metinleştirme)
-        # Her bir satır bir LangChain Document'ı olacaktır.
-        documents = []
-        for index, row in df.iterrows():
-             documents.append({
-                 "page_content": create_document_content(row),
-                 "metadata": {"source": f"Kayıt {index+1}"}
-             })
-
-        # LangChain'in DataFrameLoader'ı metin içeriğini `page_content` anahtarı ile bekler.
-        # Bu yaklaşım, doküman metadata'sını daha iyi kontrol etmemizi sağlar.
-        # DataFrameLoader yerine manuel listeyi kullanıyoruz:
-        docs = [
-            {"page_content": create_document_content(row), "metadata": {"source": f"Kayıt {index+1}", "Region": row['Region'], "Magnitude": row['Magnitude']}}
-            for index, row in df.iterrows()
-        ]
-        
-        # Doküman içeriği doğru bir şekilde LangChain Document objesine dönüştürülüyor
-        from langchain.schema import Document
-        documents = [Document(page_content=d["page_content"], metadata=d["metadata"]) for d in docs]
-
+        # LangChain'in DataFrameLoader'ı ile her satırı bir "Document" nesnesine dönüştürme
+        # Document'in içeriği (page_content) 'text' sütunundan alınır.
+        loader = DataFrameLoader(df, page_content_column='text')
+        documents = loader.load()
         return documents
-
     except FileNotFoundError:
-        st.error(f"Veri dosyası bulunamadı: {data_path}. Kaggle ortamında veya yerelde dosyanın adını kontrol edin.")
-        return []
-    except Exception as e:
-        st.error(f"Veri yükleme veya dönüştürme hatası: {e}")
+        st.error(f"Hata: {csv_file} dosyası bulunamadı. Lütfen dosyanın proje dizininde olduğundan emin olun.")
         return []
 
-# -----------------------------------------------------------
-# 3. RAG PIPELINE KURULUMU VE İNDEKLEME
-# -----------------------------------------------------------
+# ==============================================================================
+# BÖLÜM 3: RAG PIPELINE OLUŞTURMA (Indexing ve Retrieval)
+# ==============================================================================
 
-@st.cache_resource
-def initialize_rag_pipeline():
+def setup_rag_pipeline(documents):
     """
-    RAG zincirini (Embedding, Vector Store, Retriever, LLM) kurar.
-    Streamlit'in cache_resource dekoratörü ile veritabanının sadece bir kez oluşturulması sağlanır.
+    Metinleri parçalar (chunk), gömer (embed) ve vektör veritabanını (ChromaDB) kurar.
     """
-    st.write("RAG Sistemi Başlatılıyor: Veri Yükleme ve İndeksleme...")
-
-    # 1. Veri Yükleme ve Metinleştirme
-    documents = load_data_and_create_documents()
     if not documents:
-        return None
+        return None, None
 
-    # 2. Parçalama (Chunking)
+    # 3.1. Metin Parçalama (Chunking)
+    # RecursiveCharacterTextSplitter, metni ayraçlara göre (örn. \n\n, \n, boşluk) parçalar.
+    # Bu, LLM'in dikkatini küçük, anlamlı parçalara odaklamasını sağlar.
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000, 
-        chunk_overlap=100, 
-        separators=["\n\n", "\n", " ", ""]
+        chunk_size=1000, # Her parçanın maksimum karakter boyutu (Örnek Değer)
+        chunk_overlap=200 # Parçaların birbiriyle ne kadar örtüşeceği (Bağlam koruması için)
     )
-    splits = text_splitter.split_documents(documents)
+    # Parçalanan dokümanlar
+    chunks = text_splitter.split_documents(documents)
     
-    # 3. Embedding Model
-    # Google'ın Embedding modelini kullan
-    embeddings = GoogleGenerativeAIEmbeddings(model=EMBEDDING_MODEL_NAME)
+    # 3.2. Gömme Modeli (Embedding Model)
+    # Metinleri sayısal vektörlere dönüştürmek için kullanılır.
+    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001") # Google'ın önerilen embedding modeli
     
-    # 4. Vektör Depolama (ChromaDB) ve İndeksleme
-    # ChromaDB'yi yerel diskte (veya Colab/Kaggle'da oturum belleğinde) oluştur
-    vectorstore = Chroma.from_documents(
-        documents=splits, 
-        embedding=embeddings, 
-        persist_directory=VECTOR_DB_DIR
-    )
-    
-    # 5. Retriever (Geri Çağırma)
-    # En alakalı 3 dokümanı çekecek şekilde ayarla
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
-    
-    # 6. LLM (Generation Model)
-    llm = ChatGoogleGenerativeAI(model=LLM_MODEL, temperature=0.1) # Düşük sıcaklık ile veriye sadık kalma
-    
-    # 7. Prompt Mühendisliği: Halüsinasyonu önlemek için kritik prompt
-    system_prompt = (
-        "Sen, Türkiye Deprem Verileri (1914-2023) hakkında uzmanlaşmış bir bilgi asistanısın. "
-        "Lütfen **SADECE** sağlanan bağlam (context) içinde yer alan deprem kayıtlarına göre cevap ver. "
-        "Eğer bilgi bağlamda yoksa, 'Bu bilgi veri setinde bulunmamaktadır.' diye cevapla. "
-        "Cevaplarını düzenli ve bilgilendirici bir dille ver. "
-        "\n\nContext: {context}"
-    )
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", system_prompt),
-        ("human", "{input}")
-    ])
-    
-    # 8. RAG Zinciri Oluşturma (LangChain)
-    document_chain = create_stuff_documents_chain(llm, prompt)
-    retrieval_chain = create_retrieval_chain(retriever, document_chain)
-    
-    st.write(f"RAG Sistemi Başlatıldı! {len(splits)} adet metin parçası indekslendi.")
-    return retrieval_chain
+    # 3.3. Vektör Veritabanına Kaydetme (ChromaDB)
+    # Vektörler, diske kaydedilmek üzere ChromaDB'ye eklenir. 
+    # Bu adım, her çalıştırmada tekrar yapılmaz; yalnızca ilk kurulumda yapılır.
+    if not os.path.exists(CHROMA_PATH):
+        st.info("ChromaDB oluşturuluyor... (Bu işlem biraz zaman alabilir)")
+        db = Chroma.from_documents(
+            documents=chunks,
+            embedding=embeddings,
+            persist_directory=CHROMA_PATH # Veritabanını kaydet
+        )
+        db.persist()
+        st.success("ChromaDB başarıyla oluşturuldu ve kaydedildi.")
+    else:
+        # Daha önce oluşturulmuş veritabanını yükle
+        db = Chroma(persist_directory=CHROMA_PATH, embedding_function=embeddings)
+        st.info("Mevcut ChromaDB yüklendi.")
+        
+    return db
 
-# -----------------------------------------------------------
-# 4. STREAMLIT WEB ARAYÜZÜ (app.py'nin Ana Fonksiyonu)
-# -----------------------------------------------------------
+def create_qa_chain(db):
+    """
+    Generative Model (LLM) ile Retrieval (Geri Getirme) aracını birleştiren zinciri oluşturur.
+    """
+    # 3.4. Geri Getirme Aracı (Retriever)
+    # Vektör DB'de arama yapar (semantic search).
+    retriever = db.as_retriever(search_kwargs={"k": 3}) # En alakalı 3 parçayı getir
+    
+    # 3.5. LLM (Generative Model) Ayarı
+    # ChatGoogleGenerativeAI ile Gemini modelini kullanma
+    llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.2)
+    
+    # 3.6. RAG Zinciri (RetrievalQA Chain)
+    # Retriever'dan gelen bağlamı LLM'e vererek yanıt üretme.
+    qa_chain = RetrievalQA.from_chain_type(
+        llm=llm,
+        chain_type="stuff", # Geri getirilen tüm parçaları tek prompt'a ekler
+        retriever=retriever,
+        return_source_documents=True # Cevabın hangi kaynaktan geldiğini görmek için
+    )
+    
+    return qa_chain
+
+# ==============================================================================
+# BÖLÜM 4: WEB ARAYÜZÜ VE CHATBOT MANTIĞI (STREAMLIT)
+# ==============================================================================
 
 def main():
-    """Streamlit uygulamasını çalıştıran ana fonksiyon."""
-    st.title("🇹🇷 Deprem Verileri Bilgi Asistanı (RAG)")
+    """
+    Streamlit uygulamasının ana fonksiyonu.
+    """
+    # 4.1. Arayüz Ayarları ve Sistem Başlığı
+    st.set_page_config(page_title="Deprem Bilgilendirme RAG Chatbotu")
+    st.title("Türkiye Deprem Bilgilendirme Asistanı 🌍")
+    st.caption("RAG (Retrieval Augmented Generation) ile Güçlendirilmiştir")
     
-    # RAG Pipeline'ı başlat ve önbelleğe al
-    rag_chain = initialize_rag_pipeline()
+    # 4.2. RAG Pipeline Kurulumu
+    # İlk çalıştırmada veriyi yükle ve RAG zincirini oturum durumuna kaydet
+    if "qa_chain" not in st.session_state:
+        documents = load_and_transform_data(CSV_FILE)
+        if documents:
+            db = setup_rag_pipeline(documents)
+            st.session_state['qa_chain'] = create_qa_chain(db)
+            st.session_state['messages'] = [{"role": "assistant", "content": "Deprem verileri yüklendi. Hangi deprem hakkında bilgi almak istersiniz?"}]
+        else:
+            return # Veri yoksa uygulamayı sonlandır
 
-    if rag_chain is None:
-        st.stop()
-
-    # Sohbet geçmişini başlat (Streamlit Session State)
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-        
-    # Başlangıç mesajını ekle
-    if not st.session_state.messages:
-        st.session_state.messages.append({"role": "assistant", "content": "Merhaba! Türkiye Deprem Verileri (1914-2023) hakkında dilediğiniz soruyu sorabilirsiniz. Veri setine sadık kalarak cevap vereceğim."})
-
-    # Sohbet geçmişini göster
-    for message in st.session_state.messages:
+    # 4.3. Chat Geçmişinin Gösterilmesi
+    for message in st.session_state['messages']:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # Kullanıcıdan girdi al
-    if prompt := st.chat_input("Sorunuzu buraya yazın (Örn: En büyük deprem ne zaman oldu?)"):
-        # Kullanıcı mesajını ekle
-        st.session_state.messages.append({"role": "user", "content": prompt})
+    # 4.4. Kullanıcıdan Girdi Alma
+    if prompt := st.chat_input("Sorunuzu buraya yazın... (Örn: 6 Şubat 2023 depremi ile ilgili bilgi ver)"):
+        
+        # Kullanıcı mesajını geçmişe ekle
+        st.session_state['messages'].append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # Chatbot yanıtını üret
+        # 4.5. RAG Zincirini Çalıştırma
+        with st.spinner("Bilgi aranıyor ve yanıt oluşturuluyor..."):
+            qa_chain = st.session_state['qa_chain']
+            
+            # Zinciri çalıştırma
+            response = qa_chain({"query": prompt})
+
+            # RAG Yanıtını İşleme
+            answer = response["result"]
+            
+            # Kaynak Belgesini Ekleme (Proje kriteri için önemlidir)
+            source_docs = response["source_documents"]
+            sources = "\n".join([doc.page_content for doc in source_docs])
+            
+            # LLM'e cevabı kaynaklarla birlikte özetlemesi için System Prompt mantığı eklenebilir.
+            final_response = f"{answer}\n\n**Kaynaklar (Retrieved Chunks):**\n```\n{sources}\n```"
+        
+        # 4.6. Asistan Cevabını Gösterme
         with st.chat_message("assistant"):
-            with st.spinner("Yanıt aranıyor..."):
-                try:
-                    # RAG zincirini çağır
-                    response = rag_chain.invoke({"input": prompt})
-                    
-                    # Cevabı al
-                    answer = response["answer"]
-                    st.markdown(answer)
-                    
-                    # Kullanılan kaynakları (opsiyonel) göster
-                    sources = [doc.metadata.get("source", "Bilinmeyen Kaynak") for doc in response["context"]]
-                    if sources:
-                        unique_sources = list(set(sources))
-                        st.caption(f"Kullanılan Kaynaklar: {', '.join(unique_sources)}")
-                        
-                    st.session_state.messages.append({"role": "assistant", "content": answer})
+            st.markdown(final_response)
+        
+        # Cevabı geçmişe kaydet
+        st.session_state['messages'].append({"role": "assistant", "content": final_response})
 
-                except Exception as e:
-                    error_message = f"Bir hata oluştu: {e}. Lütfen API anahtarınızı ve bağlantıyı kontrol edin."
-                    st.error(error_message)
-                    st.session_state.messages.append({"role": "assistant", "content": error_message})
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
+# ==============================================================================
+# BÖLÜM 5: KOD ANLATIMININ BİTİŞİ
+# Tüm teknik anlatımlar bu dosya içerisinde yorum satırları olarak yer almıştır.
+# ==============================================================================
