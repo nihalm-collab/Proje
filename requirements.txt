@@ -1,8 +1,22 @@
-google-genai
-langchain
-langchain-core
-langchain-community
-chromadb
-pandas
-streamlit
-python-dotenv
+# Gerekli kütüphaneler (SÜRÜMLER TEMSİLİDİR, Kendi kullandığınızı yazın)
+
+# 1. RAG Çatısı ve Modüller
+langchain==0.1.0  # RAG mimarisini kurmak için temel framework
+langchain-community==0.0.15 # Langchain yardımcı modülleri için
+
+# 2. Vektörel Veritabanı (Vector Store)
+chromadb==0.4.22   # Vektörlerin depolanması ve aranması için
+
+# 3. Büyük Dil Modeli (LLM) ve Embedding Model
+google-genai==0.2.1 # Gemini API ile etkileşim için (Generation Model)
+# Veya:
+# openai==1.10.0
+# Hugging Face açık kaynak modelleri kullanılıyorsa:
+# sentence-transformers==2.2.2 
+
+# 4. Veri İşleme ve Arayüz
+pandas==2.2.0      # CSV dosyasını okumak ve tablosal veriyi işlemek için
+streamlit==1.30.0  # Web arayüzünü oluşturmak için
+
+# 5. Ortam Değişkenleri Yönetimi
+python-dotenv==1.0.1 # API anahtarını (.env dosyasından) okumak için
